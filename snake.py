@@ -25,13 +25,24 @@ RIGHT = (1, 0)
 
 
 class Snake:
-    def __init__(self):
+    # def __init__(self):
+    #     self.length = 3
+    #     self.positions = [(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)]
+    #     self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
+    #     self.color = GREEN
+    #     self.score = 0
+    #     self.steps = 0
+
+    def __init__(self, hamiltonian_cycle):
         self.length = 3
-        self.positions = [(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)]
-        self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
+        self.positions = [
+            hamiltonian_cycle.path[0]
+        ]  # Commencer au début du cycle hamiltonien
+        self.direction = RIGHT  # Direction initiale (pourrait ne pas être nécessaire)
         self.color = GREEN
         self.score = 0
         self.steps = 0
+        self.hamiltonian_cycle = hamiltonian_cycle
 
     def get_head_position(self):
         return self.positions[0]
@@ -45,11 +56,13 @@ class Snake:
     def move(self, apple):
         cur = self.get_head_position()
         x, y = self.direction
-        new = (
-            ((cur[0] + (x * GRIDSIZE)) % SCREEN_WIDTH),
-            (cur[1] + (y * GRIDSIZE)) % SCREEN_HEIGHT,
-        )
+        # new = (
+        #     ((cur[0] + (x * GRIDSIZE)) % SCREEN_WIDTH),
+        #     (cur[1] + (y * GRIDSIZE)) % SCREEN_HEIGHT,
+        # )
+        new = self.hamiltonian_cycle.next_position(self.get_head_position())
         if len(self.positions) > 2 and new in self.positions[2:]:
+            print("GAME OVER")
             self.reset()
             apple.randomize(self.positions)
 
@@ -94,6 +107,46 @@ class Apple:
         pygame.draw.rect(surface, BLACK, r, 1)
 
 
+class HamiltonianCycle:
+    def __init__(self, grid_width, grid_height):
+        self.grid_width = grid_width
+        self.grid_height = grid_height
+        self.path = self.generate_cycle()
+
+    def generate_cycle(self):
+        path = []
+        # Commence en haut à gauche et se déplace à droite jusqu'à la fin
+        for x in range(0, self.grid_width):
+            path.append((x * GRIDSIZE, 0))
+
+        # Commence les zigzags à partir de la droite vers la gauche, en évitant la première colonne
+        for y in range(1, self.grid_height):
+            if y % 2 == 1:
+                # Descendre d'une ligne à l'extrême droite et se déplacer vers la gauche
+                path.extend(
+                    [
+                        (x * GRIDSIZE, y * GRIDSIZE)
+                        for x in range(self.grid_width - 1, 0, -1)
+                    ]
+                )
+            else:
+                # Se déplacer vers la droite mais seulement jusqu'à la deuxième colonne (en évitant la première colonne)
+                path.extend(
+                    [(x * GRIDSIZE, y * GRIDSIZE) for x in range(1, self.grid_width)]
+                )
+
+        # Finalement, remonter par la première colonne
+        path.extend([(0, y * GRIDSIZE) for y in range(self.grid_height - 1, -1, -1)])
+
+        return path
+
+    def next_position(self, current_position):
+        # Trouver la position actuelle dans le chemin
+        index = self.path.index(current_position)
+        # Retourner la position suivante dans le chemin
+        return self.path[(index + 1) % len(self.path)]
+
+
 def draw_grid(surface):
     for y in range(0, int(GRID_HEIGHT)):
         for x in range(0, int(GRID_WIDTH)):
@@ -120,14 +173,16 @@ surface = pygame.Surface(screen.get_size())
 surface = surface.convert()
 draw_grid(surface)
 
-snake = Snake()
+hc = HamiltonianCycle(GRID_WIDTH, GRID_HEIGHT)
+snake = Snake(hc)
 apple = Apple(snake)
+
 
 scores = []
 steps = []
 
 while True:
-    clock.tick(10)
+    clock.tick(300)
     snake.move(apple)
     check_eat(snake, apple)
     draw_grid(surface)
