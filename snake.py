@@ -42,7 +42,7 @@ class Snake:
         else:
             self.direction = point
 
-    def move(self):
+    def move(self, apple):
         cur = self.get_head_position()
         x, y = self.direction
         new = (
@@ -51,6 +51,8 @@ class Snake:
         )
         if len(self.positions) > 2 and new in self.positions[2:]:
             self.reset()
+            apple.randomize(self.positions)
+
         else:
             self.positions.insert(0, new)
             if len(self.positions) > self.length:
@@ -125,8 +127,8 @@ scores = []
 steps = []
 
 while True:
-    clock.tick(100)
-    snake.move()
+    clock.tick(10)
+    snake.move(apple)
     check_eat(snake, apple)
     draw_grid(surface)
     snake.draw(surface)
