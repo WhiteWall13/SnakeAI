@@ -23,6 +23,7 @@ DOWN = (0, 1)
 LEFT = (-1, 0)
 RIGHT = (1, 0)
 
+
 class Snake:
     def __init__(self):
         self.length = 3
@@ -44,7 +45,10 @@ class Snake:
     def move(self):
         cur = self.get_head_position()
         x, y = self.direction
-        new = (((cur[0] + (x * GRIDSIZE)) % SCREEN_WIDTH), (cur[1] + (y * GRIDSIZE)) % SCREEN_HEIGHT)
+        new = (
+            ((cur[0] + (x * GRIDSIZE)) % SCREEN_WIDTH),
+            (cur[1] + (y * GRIDSIZE)) % SCREEN_HEIGHT,
+        )
         if len(self.positions) > 2 and new in self.positions[2:]:
             self.reset()
         else:
@@ -57,6 +61,7 @@ class Snake:
         self.positions = [(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)]
         self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
         self.score = 0
+        self.steps = 0
 
     def draw(self, surface):
         for p in self.positions:
@@ -64,20 +69,28 @@ class Snake:
             pygame.draw.rect(surface, self.color, r)
             pygame.draw.rect(surface, BLACK, r, 1)
 
+
 class Apple:
-    def __init__(self):
+    def __init__(self, snake):
         self.position = (0, 0)
         self.color = RED
-        self.randomize()
+        self.randomize(snake.positions)
 
-    def randomize(self):
-        self.position = (random.randint(0, GRID_WIDTH - 1) * GRIDSIZE,
-                         random.randint(0, GRID_HEIGHT - 1) * GRIDSIZE)
+    def randomize(self, snake_positions):
+        while True:
+            new_position = (
+                random.randint(0, GRID_WIDTH - 1) * GRIDSIZE,
+                random.randint(0, GRID_HEIGHT - 1) * GRIDSIZE,
+            )
+            if new_position not in snake_positions:
+                break
+        self.position = new_position
 
     def draw(self, surface):
         r = pygame.Rect((self.position[0], self.position[1]), (GRIDSIZE, GRIDSIZE))
         pygame.draw.rect(surface, self.color, r)
         pygame.draw.rect(surface, BLACK, r, 1)
+
 
 def draw_grid(surface):
     for y in range(0, int(GRID_HEIGHT)):
@@ -85,11 +98,13 @@ def draw_grid(surface):
             r = pygame.Rect((x * GRIDSIZE, y * GRIDSIZE), (GRIDSIZE, GRIDSIZE))
             pygame.draw.rect(surface, BLACK, r)
 
+
 def check_eat(snake, apple):
     if snake.get_head_position() == apple.position:
         snake.length += 1
         snake.score += 1
-        apple.randomize()
+        apple.randomize(snake.positions)
+
 
 # Game initialization
 pygame.init()
@@ -104,25 +119,24 @@ surface = surface.convert()
 draw_grid(surface)
 
 snake = Snake()
-print(snake.positions)
-apple = Apple()
+apple = Apple(snake)
 
 scores = []
 steps = []
 
 while True:
-    clock.tick(10)
+    clock.tick(100)
     snake.move()
     check_eat(snake, apple)
     draw_grid(surface)
     snake.draw(surface)
     apple.draw(surface)
-    screen.blit(surface, (0,0))
+    screen.blit(surface, (0, 0))
 
-    text = font.render("Score {0}".format(snake.score), 1, (255,255,255))
-    screen.blit(text, (5,10))
-    text = font.render("Steps {0}".format(snake.steps), 1, (255,255,255))
-    screen.blit(text, (5,30))
+    text = font.render("Score {0}".format(snake.score), 1, (255, 255, 255))
+    screen.blit(text, (5, 10))
+    text = font.render("Steps {0}".format(snake.steps), 1, (255, 255, 255))
+    screen.blit(text, (5, 30))
     pygame.display.update()
 
     scores.append(snake.score)
@@ -140,4 +154,3 @@ while True:
                 snake.turn(LEFT)
             elif event.key == pygame.K_RIGHT:
                 snake.turn(RIGHT)
-
