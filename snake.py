@@ -25,24 +25,17 @@ RIGHT = (1, 0)
 
 
 class Snake:
-    # def __init__(self):
-    #     self.length = 3
-    #     self.positions = [(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)]
-    #     self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
-    #     self.color = GREEN
-    #     self.score = 0
-    #     self.steps = 0
-
-    def __init__(self, hamiltonian_cycle):
+    def __init__(self):
         self.length = 3
-        self.positions = [
-            hamiltonian_cycle.path[0]
-        ]  # Commencer au début du cycle hamiltonien
-        self.direction = RIGHT  # Direction initiale (pourrait ne pas être nécessaire)
+        self.positions = [(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)]
+        self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
+        # self.direction = RIGHT  # Initial direction might not be necessary
         self.color = GREEN
         self.score = 0
         self.steps = 0
-        self.hamiltonian_cycle = hamiltonian_cycle
+        # Initialize HamiltonianCycle with the start position
+        self.hamiltonian_cycle = HamiltonianCycle(GRID_WIDTH, GRID_HEIGHT, self.positions[0], self.direction)
+
 
     def get_head_position(self):
         return self.positions[0]
@@ -107,44 +100,91 @@ class Apple:
         pygame.draw.rect(surface, BLACK, r, 1)
 
 
+# class HamiltonianCycle:
+#     def __init__(self, grid_width, grid_height):
+#         self.grid_width = grid_width
+#         self.grid_height = grid_height
+#         self.path = self.generate_cycle()
+
+#     def generate_cycle(self):
+#         path = []
+#         # Commence en haut à gauche et se déplace à droite jusqu'à la fin
+#         for x in range(0, self.grid_width):
+#             path.append((x * GRIDSIZE, 0))
+
+#         # Commence les zigzags à partir de la droite vers la gauche, en évitant la première colonne
+#         for y in range(1, self.grid_height):
+#             if y % 2 == 1:
+#                 # Descendre d'une ligne à l'extrême droite et se déplacer vers la gauche
+#                 path.extend(
+#                     [
+#                         (x * GRIDSIZE, y * GRIDSIZE)
+#                         for x in range(self.grid_width - 1, 0, -1)
+#                     ]
+#                 )
+#             else:
+#                 # Se déplacer vers la droite mais seulement jusqu'à la deuxième colonne (en évitant la première colonne)
+#                 path.extend(
+#                     [(x * GRIDSIZE, y * GRIDSIZE) for x in range(1, self.grid_width)]
+#                 )
+
+#         # Finalement, remonter par la première colonne
+#         path.extend([(0, y * GRIDSIZE) for y in range(self.grid_height - 1, -1, -1)])
+
+#         return path
+
+#     def next_position(self, current_position):
+#         # Trouver la position actuelle dans le chemin
+#         index = self.path.index(current_position)
+#         # Retourner la position suivante dans le chemin
+#         return self.path[(index + 1) % len(self.path)]
+    
 class HamiltonianCycle:
-    def __init__(self, grid_width, grid_height):
+    def __init__(self, grid_width, grid_height, start_position, direction):
         self.grid_width = grid_width
         self.grid_height = grid_height
-        self.path = self.generate_cycle()
+        self.start_position = start_position
+        self.path = self.generate_cycle(direction)
 
-    def generate_cycle(self):
-        path = []
-        # Commence en haut à gauche et se déplace à droite jusqu'à la fin
-        for x in range(0, self.grid_width):
-            path.append((x * GRIDSIZE, 0))
+    def generate_cycle(self, current_direction):
+        path = [self.start_position]
+        # Prioriser la direction actuelle du serpent
+        direction_order = [current_direction] + [d for d in [RIGHT, DOWN, LEFT, UP] if d != current_direction]
+        move_attempts = 0
 
-        # Commence les zigzags à partir de la droite vers la gauche, en évitant la première colonne
-        for y in range(1, self.grid_height):
-            if y % 2 == 1:
-                # Descendre d'une ligne à l'extrême droite et se déplacer vers la gauche
-                path.extend(
-                    [
-                        (x * GRIDSIZE, y * GRIDSIZE)
-                        for x in range(self.grid_width - 1, 0, -1)
-                    ]
-                )
-            else:
-                # Se déplacer vers la droite mais seulement jusqu'à la deuxième colonne (en évitant la première colonne)
-                path.extend(
-                    [(x * GRIDSIZE, y * GRIDSIZE) for x in range(1, self.grid_width)]
-                )
+        while len(path) < self.grid_width * self.grid_height and move_attempts < len(direction_order):
+            current_position = path[-1]
+            x, y = current_position
+            grid_x, grid_y = x // GRIDSIZE, y // GRIDSIZE
 
-        # Finalement, remonter par la première colonne
-        path.extend([(0, y * GRIDSIZE) for y in range(self.grid_height - 1, -1, -1)])
+            for direction in direction_order:
+                dx, dy = direction
+                new_position = ((grid_x + dx) * GRIDSIZE, (grid_y + dy) * GRIDSIZE)
+
+                if (0 <= new_position[0] < SCREEN_WIDTH and 0 <= new_position[1] < SCREEN_HEIGHT and new_position not in path):
+                    path.append(new_position)
+                    move_attempts = 0  # Réinitialiser le compteur d'essais
+                    # Mettre à jour l'ordre de direction basé sur la direction actuelle
+                    direction_order = [direction] + [d for d in [RIGHT, DOWN, LEFT, UP] if d != direction]
+                    break
+                else:
+                    move_attempts += 1
 
         return path
 
+    
+    def recalculate_cycle(self, new_start_position, direction):
+        self.start_position = new_start_position
+        self.path = self.generate_cycle(direction)
+
+
+
     def next_position(self, current_position):
-        # Trouver la position actuelle dans le chemin
+        # Find the current position in the path
         index = self.path.index(current_position)
-        # Retourner la position suivante dans le chemin
+        # Return the next position in the path
         return self.path[(index + 1) % len(self.path)]
+
 
 
 def draw_grid(surface):
@@ -159,6 +199,7 @@ def check_eat(snake, apple):
         snake.length += 1
         snake.score += 1
         apple.randomize(snake.positions)
+        snake.hamiltonian_cycle.recalculate_cycle(snake.get_head_position(), snake.direction)
 
 
 # Game initialization
@@ -173,16 +214,14 @@ surface = pygame.Surface(screen.get_size())
 surface = surface.convert()
 draw_grid(surface)
 
-hc = HamiltonianCycle(GRID_WIDTH, GRID_HEIGHT)
-snake = Snake(hc)
+snake = Snake()
 apple = Apple(snake)
-
 
 scores = []
 steps = []
 
 while True:
-    clock.tick(300)
+    clock.tick(100)
     snake.move(apple)
     check_eat(snake, apple)
     draw_grid(surface)
@@ -202,12 +241,12 @@ while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                snake.turn(UP)
-            elif event.key == pygame.K_DOWN:
-                snake.turn(DOWN)
-            elif event.key == pygame.K_LEFT:
-                snake.turn(LEFT)
-            elif event.key == pygame.K_RIGHT:
-                snake.turn(RIGHT)
+    #     elif event.type == pygame.KEYDOWN:
+    #         if event.key == pygame.K_UP:
+    #             snake.turn(UP)
+    #         elif event.key == pygame.K_DOWN:
+    #             snake.turn(DOWN)
+    #         elif event.key == pygame.K_LEFT:
+    #             snake.turn(LEFT)
+    #         elif event.key == pygame.K_RIGHT:
+    #             snake.turn(RIGHT)
