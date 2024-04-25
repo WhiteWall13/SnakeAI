@@ -241,12 +241,12 @@ while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
-    #     elif event.type == pygame.KEYDOWN:
-    #         if event.key == pygame.K_UP:
-    #             snake.turn(UP)
-    #         elif event.key == pygame.K_DOWN:
-    #             snake.turn(DOWN)
-    #         elif event.key == pygame.K_LEFT:
-    #             snake.turn(LEFT)
-    #         elif event.key == pygame.K_RIGHT:
-    #             snake.turn(RIGHT)
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                snake.turn(UP)
+            elif event.key == pygame.K_DOWN:
+                snake.turn(DOWN)
+            elif event.key == pygame.K_LEFT:
+                snake.turn(LEFT)
+            elif event.key == pygame.K_RIGHT:
+                snake.turn(RIGHT)

@@ -8,6 +8,7 @@ BLACK = (0, 0, 0)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
 
 # Game dimensions
 SCREEN_WIDTH = 480
@@ -89,6 +90,8 @@ class Snake:
         update_grid(grid, self.positions)  # Leave the last segment free since it will be vacated
         start = (self.get_head_position()[0] // GRIDSIZE, self.get_head_position()[1] // GRIDSIZE)
         goal = (apple.position[0] // GRIDSIZE, apple.position[1] // GRIDSIZE)
+        head_position = self.get_head_position()
+        head_x, head_y = head_position[0], head_position[1]
         self.path = a_star_search(grid, start, goal, self.positions)
         
         if self.path:
@@ -96,7 +99,9 @@ class Snake:
             new_head_position = (next_step[0] * GRIDSIZE, next_step[1] * GRIDSIZE)
 
             # Vérifiez si la nouvelle position est sur le corps du serpent
-            if new_head_position in self.positions[:-1]:
+            if new_head_position in self.positions[:-1] or not self.is_move_safe(grid, new_head_position):
+                if not self.is_move_safe(grid, new_head_position):
+                    print("Not safe, recalculating path.")
                 print("Collision detected, recalculating path.")
                 # Corriger les indices ici
                 head_pos = self.get_head_position()
@@ -105,7 +110,15 @@ class Snake:
                 apple_grid_x = apple.position[0] // GRIDSIZE
                 apple_grid_y = apple.position[1] // GRIDSIZE
                 self.path = a_star_search(grid, (head_grid_x, head_grid_y), (apple_grid_x, apple_grid_y), self.positions)
-                return  # Skip the move for this turn or handle differently
+                if not self.path:
+                    # Aucun chemin sécurisé trouvé, temporiser
+                    print("Still no safe path, temporizing.")
+                    direction_to_temporize = self.find_space_for_temporizing(grid)
+                    if direction_to_temporize:
+                        new_head_position = self.get_temporized_position(direction_to_temporize, head_position)
+                    else:
+                        print("No safe move available.")
+                        return
             else:
                 # Continue avec le mouvement
                 self.positions.insert(0, new_head_position)
@@ -115,9 +128,40 @@ class Snake:
                 # Gestion de la pomme
                 if new_head_position == apple.position:
                     self.length += 1
+                    self.score += 1
                     apple.randomize(self.positions)
-        else:
-            print("No path found. Game over or trying an alternative strategy.")
+                    
+        if not self.path:  # No safe path was found or the original path was unsafe
+            print("No safe path found or risky path, temporizing.")
+            direction_to_temporize = self.find_space_for_temporizing(grid)
+            if direction_to_temporize:
+                new_head_position = self.get_temporized_position(direction_to_temporize, head_position)
+            else:
+                print("No safe move available. Temporizing might not be possible.")
+                return  # Might consider other strategies or halt movement
+
+        # Perform the safe movement
+        self.positions.insert(0, new_head_position)
+        if len(self.positions) > self.length:
+            self.positions.pop()
+
+        # Handle eating the apple
+        if new_head_position == apple.position:
+            self.length += 1
+            self.score += 1
+            apple.randomize(self.positions)
+            
+    def get_temporized_position(self, direction, head_position):
+        # Calculate new position based on the direction
+        if direction == 'UP':
+            return (head_position[0], head_position[1] - GRIDSIZE)
+        elif direction == 'DOWN':
+            return (head_position[0], head_position[1] + GRIDSIZE)
+        elif direction == 'LEFT':
+            return (head_position[0] - GRIDSIZE, head_position[1])
+        elif direction == 'RIGHT':
+            return (head_position[0] + GRIDSIZE, head_position[1])
+
 
     def reset(self):
         self.length = 3
@@ -125,6 +169,7 @@ class Snake:
         self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
         self.score = 0
         self.steps = 0
+        self.temp = False
 
     def draw(self, surface):
         # Dessiner le serpent
@@ -138,6 +183,88 @@ class Snake:
             for step in self.path:
                 r = pygame.Rect((step[0] * GRIDSIZE, step[1] * GRIDSIZE), (GRIDSIZE, GRIDSIZE))
                 pygame.draw.rect(surface, BLUE, r)
+                
+    def find_longest_path_to_tail(self, grid, start, tail, body):
+        def dfs(current, path, visited):
+            if current == tail:
+                return path
+            longest_path = []
+            for direction in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # DOWN, RIGHT, UP, LEFT
+                neighbor = (current[0] + direction[0], current[1] + direction[1])
+                if (0 <= neighbor[0] < GRID_WIDTH and 
+                    0 <= neighbor[1] < GRID_HEIGHT and 
+                    neighbor not in visited and 
+                    neighbor not in body):
+                    
+                    visited.add(neighbor)
+                    sub_path = dfs(neighbor, path + [neighbor], visited)
+                    visited.remove(neighbor)
+                    
+                    if len(sub_path) > len(longest_path):
+                        longest_path = sub_path
+            return longest_path
+
+        visited = set([start])
+        return dfs(start, [start], visited) 
+    
+
+    def find_space_for_temporizing(self, grid):
+        head_x, head_y = self.get_head_position()
+        directions = {
+            'UP': (head_x, head_y - GRIDSIZE),
+            'DOWN': (head_x, head_y + GRIDSIZE),
+            'LEFT': (head_x - GRIDSIZE, head_y),
+            'RIGHT': (head_x + GRIDSIZE, head_y)
+        }
+        max_space = 0
+        best_direction = None
+
+        for direction, (new_x, new_y) in directions.items():
+            if (0 <= new_x < SCREEN_WIDTH and 0 <= new_y < SCREEN_HEIGHT and
+                (new_x, new_y) not in self.positions):
+                # Faire un appel récursif ou itératif pour calculer l'espace ouvert.
+                space = self.calculate_open_space(grid, (new_x // GRIDSIZE, new_y // GRIDSIZE), set())
+                if space > max_space:
+                    max_space = space
+                    best_direction = direction
+        
+        return best_direction
+
+    def calculate_open_space(self, grid, start, visited):
+        if start in visited or not (0 <= start[0] < GRID_WIDTH) or not (0 <= start[1] < GRID_HEIGHT):
+            return 0
+        if grid[start[1]][start[0]] == 1:  # Obstacle or part of the snake's body
+            return 0
+        
+        visited.add(start)
+        space = 1  # Include the current cell
+        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # DOWN, RIGHT, UP, LEFT
+            next_cell = (start[0] + dx, start[1] + dy)
+            space += self.calculate_open_space(grid, next_cell, visited)
+        
+        return space
+    
+    def is_move_safe(self, grid, new_head_position):
+        # Convertit la position en indices de grille
+        grid_x = new_head_position[0] // GRIDSIZE
+        grid_y = new_head_position[1] // GRIDSIZE
+
+        # Vérifie si la position est dans les limites et libre
+        if not (0 <= grid_x < GRID_WIDTH and 0 <= grid_y < GRID_HEIGHT and grid[grid_y][grid_x] == 0):
+            return False
+
+        # Calcule l'espace ouvert disponible autour de la nouvelle position de la tête
+        visited = set([(grid_x, grid_y)])
+        open_space = self.calculate_open_space(grid, (grid_x, grid_y), visited)
+
+        # Utilisez une fraction de la longueur du serpent comme seuil. Par exemple, la moitié de la longueur actuelle du serpent.
+        # Cela garantit qu'il y a suffisamment de place pour que le serpent ne se retrouve pas immédiatement bloqué.
+        # Vous pouvez ajuster ce coefficient en fonction de l'agressivité et de la prudence souhaitée.
+        safe_threshold = max(5, self.length)  # Assurez-vous qu'il y a au moins un minimum absolu d'espaces libres.
+
+        return open_space > safe_threshold
+
+
 
 
 
@@ -168,11 +295,12 @@ def draw_grid(surface):
             r = pygame.Rect((x * GRIDSIZE, y * GRIDSIZE), (GRIDSIZE, GRIDSIZE))
             pygame.draw.rect(surface, BLACK, r)
 
-def check_eat(snake, apple):
-    if snake.get_head_position() == apple.position:
-        snake.length += 1
-        snake.score += 1
-        apple.randomize(snake.positions)
+# def check_eat(snake, apple):
+#     if snake.get_head_position() == apple.position:
+#         print('ok')
+#         snake.length += 1
+#         snake.score += 1
+#         apple.randomize(snake.positions)
         
 def update_grid(grid, snake_positions):
     # Initialiser toute la grille à 0
@@ -201,7 +329,7 @@ def main():
 
     while True:
         snake.move(apple, grid)
-        check_eat(snake, apple)
+        # check_eat(snake, apple)
         
         screen.fill(BLACK)
         snake.draw(screen)
